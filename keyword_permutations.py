@@ -1,6 +1,7 @@
 import csv
 import subprocess
 import os
+from tqdm import tqdm  # Import tqdm for progress bar
 
 # Function to get permutations from Ollama Llama 3.2
 def get_permutations(keyword):
@@ -22,9 +23,7 @@ def try_open_csv(file_path):
     for encoding in encodings:
         try:
             with open(file_path, 'r', newline='', encoding=encoding) as csvfile:
-                # Read a small portion to test
                 csvfile.read(1024)
-                # If successful, return the encoding
                 return encoding
         except UnicodeDecodeError as e:
             print(f"Tried encoding '{encoding}' - failed: {e}")
@@ -57,8 +56,13 @@ def process_csv(input_file, output_file):
                 print(f"Error: CSV is missing one or more required columns. Found: {reader.fieldnames}")
                 return
             
-            # Process each row
-            for row in reader:
+            # Get total number of rows for progress bar (excluding header)
+            total_rows = sum(1 for line in csvfile) - 1
+            csvfile.seek(0)  # Reset file pointer to start
+            next(csvfile)  # Skip header row again
+            
+            # Process each row with progress bar
+            for row in tqdm(reader, total=total_rows, desc="Processing rows"):
                 rf_keywords = row['RF filter keywords'].strip()
                 if rf_keywords:
                     permutations = get_permutations(rf_keywords)
@@ -73,7 +77,7 @@ def process_csv(input_file, output_file):
             writer.writeheader()
             writer.writerows(rows)
         
-        print(f"Processing complete. Results written to '{output_file}'")
+        print(f"\nProcessing complete. Results written to '{output_file}'")
     
     except Exception as e:
         print(f"Error during processing: {e}")
