@@ -1,13 +1,6 @@
 import csv
 import subprocess
 import os
-import chardet
-
-# Detect file encoding
-def detect_encoding(file_path):
-    with open(file_path, 'rb') as f:
-        result = chardet.detect(f.read())
-    return result['encoding']
 
 # Function to get permutations from Ollama Llama 3.2
 def get_permutations(keyword):
@@ -23,28 +16,48 @@ def get_permutations(keyword):
     except Exception as e:
         return f'Error: {str(e)}'
 
+# Function to try opening file with different encodings
+def try_open_csv(file_path):
+    encodings = ['utf-8', 'utf-8-sig', 'latin1', 'iso-8859-1', 'cp1252']
+    for encoding in encodings:
+        try:
+            with open(file_path, 'r', newline='', encoding=encoding) as csvfile:
+                # Read a small portion to test
+                csvfile.read(1024)
+                # If successful, return the encoding
+                return encoding
+        except UnicodeDecodeError as e:
+            print(f"Tried encoding '{encoding}' - failed: {e}")
+    raise Exception("Could not decode file with any supported encoding.")
+
 # Function to process the CSV file
 def process_csv(input_file, output_file):
     if not os.path.exists(input_file):
         print(f"Error: Input file '{input_file}' not found.")
         return
     
-    # Detect encoding
-    encoding = detect_encoding(input_file)
-    print(f"Detected encoding: {encoding}")
+    # Detect workable encoding
+    try:
+        encoding = try_open_csv(input_file)
+        print(f"Using encoding: {encoding}")
+    except Exception as e:
+        print(f"Error: {e}")
+        return
     
-    # Read the CSV and process it
+    # Read the CSV with the detected encoding
     rows = []
     try:
         with open(input_file, 'r', newline='', encoding=encoding) as csvfile:
             reader = csv.DictReader(csvfile)
             
+            # Check for required columns
             required_columns = {'RF filter keywords', 'Keyword colors', 'Risk Score', 
                               'Customer', 'Permutations', 'Notes'}
             if not all(col in reader.fieldnames for col in required_columns):
-                print("Error: CSV is missing one or more required columns")
+                print(f"Error: CSV is missing one or more required columns. Found: {reader.fieldnames}")
                 return
             
+            # Process each row
             for row in reader:
                 rf_keywords = row['RF filter keywords'].strip()
                 if rf_keywords:
@@ -52,7 +65,7 @@ def process_csv(input_file, output_file):
                     row['Permutations'] = permutations
                 rows.append(row)
     
-        # Write the updated data to a new CSV (always use UTF-8 for output)
+        # Write to output file in UTF-8
         with open(output_file, 'w', newline='', encoding='utf-8') as csvfile:
             fieldnames = ['RF filter keywords', 'Keyword colors', 'Risk Score', 
                          'Customer', 'Permutations', 'Notes']
@@ -62,12 +75,12 @@ def process_csv(input_file, output_file):
         
         print(f"Processing complete. Results written to '{output_file}'")
     
-    except UnicodeDecodeError as e:
-        print(f"UnicodeDecodeError: {e}. Try a different encoding or fix the file.")
+    except Exception as e:
+        print(f"Error during processing: {e}")
 
 # Main execution
 if __name__ == "__main__":
-    input_file = 'input.csv'
-    output_file = 'output.csv'
+    input_file = 'input.csv'  # Your input file
+    output_file = 'output.csv'  # Your output file
     print("Starting CSV processing...")
     process_csv(input_file, output_file)
